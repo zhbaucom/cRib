@@ -1,0 +1,190 @@
+---
+title: "Untitled"
+author: "Zach"
+date: "12/28/2020"
+output: html_document
+---
+
+```{r}
+library(keras)
+library(EBImage)
+```
+
+```{r}
+card<-readImage("cards/spade/ace_of_spades (2).png") # Reading an imgae from the
+                                         # dataset
+print(card) # Print the details of image
+```
+
+
+```{r}
+display(card)
+```
+
+```{r}
+cardDir <- "cards/club"
+img.card<- sample(dir(cardDir)); #-------shuffle the order
+cards<-list(NULL);        
+for(i in 1:length(img.card))
+{ cards[[i]]<- readImage(paste(cardDir, img.card[i], sep = "/"))
+ cards[[i]]<- resize(cards[[i]], 100, 100)} #resizing to 100x100
+club<- cards              # Storing stack of the Clubs cards in
+                          # matrix form in a list
+#-----------------------------------------------------------
+
+cardDir <- "cards/heart"
+img.card<- sample(dir(cardDir)); #-------shuffle the order
+cards<-list(NULL);        
+for(i in 1:length(img.card))
+{ cards[[i]]<- readImage(paste(cardDir, img.card[i], sep = "/"))
+ cards[[i]]<- resize(cards[[i]], 100, 100)} #resizing to 100x100
+heart<- cards             # Storing stack of the Hearts cards in
+                          # matrix form in a list
+#------------------------------------------------------------
+
+cardDir <- "cards/spade"
+img.card<- sample(dir(cardDir)); #-------shuffle the order
+cards<-list(NULL);        
+for(i in 1:length(img.card))
+{ cards[[i]]<- readImage(paste(cardDir, img.card[i], sep = "/"))
+ cards[[i]]<- resize(cards[[i]], 100, 100)} #resizing to 100x100
+spade<- cards             # Storing stack of the Spades cards in
+                          # matrix form in a list
+#------------------------------------------------------------
+
+cardDir <- "cards/diamond"
+img.card<- sample(dir(cardDir)); #-------shuffle the order
+cards<-list(NULL);        
+for(i in 1:length(img.card))
+{ cards[[i]]<- readImage(paste(cardDir, img.card[i], sep = "/"))
+ cards[[i]]<- resize(cards[[i]], 100, 100)} #resizing to 100x100
+diamond<- cards           # Storing stack of the Diamonds cards in
+                          # matrix form in a list
+#-------------------------------------------------------------
+train_pool<-c(club[1:40], 
+              heart[1:40], 
+              spade[1:40], 
+              diamond[1:40]) # Vector of all the training images. 
+                             # The first 40 images from each suit 
+                             # are included in the train set
+# dim(train_pool[[1]]@.Data)
+# dim(combine(train))
+# dim(train_pool)
+# train_pool[1:4]
+# train_pool[[1]]
+###!!!!!!!!!!!!!!!!!!!!!!!!!DON'T UNDERSTAND THE VECTOR HERE
+train<-aperm(combine(train_pool), c(4,1,2,3)) # Combine and stacked
+test_pool<-c(club[41:43], 
+             heart[41:43], 
+             spade[41:43], 
+             diamond[41:43]) # Vector of all test images. The last
+                             # 3 images from each suit is included
+                             # in test set
+test<-aperm(combine(test_pool), c(4,1,2,3)) # Combined and stacked
+dim(test)
+```
+
+
+```{r}
+par(mfrow=c(3,4)) # To contain all images in single frame
+for(i in 1:12){
+  plot(test_pool[[i]])
+  }
+par(mfrow=c(1,1)) 
+```
+
+
+
+
+```{r}
+train_y<-c(rep(0,40),rep(1,40),rep(2,40),rep(3,40))
+test_y<-c(rep(0,3),rep(1,3),rep(2,3),rep(3,3))
+train_lab<-to_categorical(train_y) #Catagorical vector for training 
+                                   #classes
+test_lab<-to_categorical(test_y)#Catagorical vector for test classes
+```
+
+
+```{r}
+# Model Building
+model.card<- keras_model_sequential() #-Keras Model composed of a 
+                                      #-----linear stack of layers
+model.card %>%                   #---------Initiate and connect to #----------------------------(A)-----------------------------------#
+layer_conv_2d(filters = 40,       #----------First convoluted layer
+ kernel_size = c(4,4),             #---40 Filters with dimension 4x4
+ activation = "relu",              #-with a ReLu activation function
+ input_shape = c(100,100,4)) %>%   
+#----------------------------(B)-----------------------------------#
+layer_conv_2d(filters = 40,       #---------Second convoluted layer
+ kernel_size = c(4,4),             #---40 Filters with dimension 4x4
+ activation = "relu") %>%          #-with a ReLu activation function
+#---------------------------(C)-----------------------------------#
+layer_max_pooling_2d(pool_size = c(4,4) )%>%   #--------Max Pooling
+#-----------------------------------------------------------------#
+layer_dropout(rate = 0.25) %>%   #-------------------Drop out layer
+#----------------------------(D)-----------------------------------#
+layer_conv_2d(filters = 80,      #-----------Third convoluted layer
+ kernel_size = c(4,4),            #----80 Filters with dimension 4x4
+ activation = "relu") %>%         #--with a ReLu activation function
+#-----------------------------(E)----------------------------------#
+layer_conv_2d(filters = 80,      #----------Fourth convoluted layer
+ kernel_size = c(4,4),            #----80 Filters with dimension 4x4
+ activation = "relu") %>%         #--with a ReLu activation function
+#-----------------------------(F)----------------------------------#
+layer_max_pooling_2d(pool_size = c(4,4)) %>%  #---------Max Pooling
+#-----------------------------------------------------------------#
+layer_dropout(rate = 0.35) %>%   #-------------------Drop out layer
+#------------------------------(G)---------------------------------#
+layer_flatten()%>%   #---Flattening the final stack of feature maps
+#------------------------------(H)---------------------------------#
+layer_dense(units = 256, activation = "relu")%>% #-----Hidden layer
+#---------------------------(I)-----------------------------------#
+layer_dropout(rate= 0.25)%>%     #-------------------Drop-out layer
+#-----------------------------------------------------------------#
+layer_dense(units = 4, activation = "softmax") 
+
+
+
+model.card %>% #-----Final Layer
+#----------------------------(J)-----------------------------------#
+compile(loss = 'categorical_crossentropy',
+          optimizer = optimizer_adam(),
+          metrics = c("accuracy"))   # Compiling the architecture
+
+summary(model.card)
+
+```
+
+```{r}
+history<- model.card %>%
+ fit(train, 
+ train_lab, 
+ epochs = 100,
+ batch_size = 40,
+ validation_split = 0.2
+ )
+```
+
+
+
+```{r}
+#Model Evaluation
+model.card %>% evaluate(train,train_lab) #Evaluation of training set 
+pred<- model.card %>% predict_classes(train) #-----Classification
+Train_Result<-table(Predicted = pred, Actual = train_y) #----Results
+model.card %>% evaluate(test, test_lab) #-----Evaluation of test set
+pred1<- model.card  %>% predict_classes(test)   #-----Classification
+Test_Result<-table(Predicted = pred1, Actual = test_y) #-----Results
+rownames(Train_Result)<-rownames(Test_Result)<-colnames(Train_Result)<-colnames(Test_Result)<-c("Clubs", "Hearts", "Spades", "Diamonds")
+print(Train_Result)
+print(Test_Result)
+```
+
+
+
+
+
+
+
+
+

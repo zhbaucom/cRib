@@ -1,0 +1,153 @@
+---
+title: "Untitled"
+author: "Zach"
+date: "12/23/2020"
+output: html_document
+---
+
+```{r}
+library(utils)
+library(tidyverse)
+```
+
+
+```{r}
+suit <- c("S", "H", "D", "C")
+value <- c("A", 2:10, "J", "Q", "K")
+numvalue <- c(1:10, rep(10, 3))
+seqvalue <- 1:13
+names(numvalue) <- names(seqvalue) <- value
+deck <- paste(sort(rep(value, 4)), rep(suit, 13), sep = "")
+```
+
+
+```{r}
+ih <- sample(deck, 6)
+kh <- sample(ih, 4)
+dh <- ih[!(ih %in% kh)]
+
+
+
+flop <- sample(deck[!(deck %in% ih)], 1)
+
+hand <- append(kh, flop)
+
+fc <- numvalue[substr(hand, 1,nchar(hand)-1)]
+```
+
+```{r}
+deck
+```
+
+```{r}
+kh <- c("8♠", "7♠", "10♠", "5♠")
+flop <- "3♥"
+```
+
+
+```{r}
+CribCount(kh, flop, TRUE)
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+DEALER <- TRUE
+
+twoforhisnobsPoints <- ifelse(DEALER && grepl("J", flop), 2, 0)
+
+```
+
+
+
+
+```{r}
+if(any(grepl("J", kh)))
+  nobbinsPoints <- any(substr(kh[grepl("J", kh)], 2, 2) == substr(flop, nchar(flop), nchar(flop)))
+```
+
+
+
+```{r}
+
+tsv <- seqvalue[substr(hand, 1,nchar(hand)-1)]
+
+
+runPoints <- 5 * tsv %>%
+  sort() %>%
+  diff() %>%
+  all(. == 1)
+
+if(runPoints == 0){
+  runPoints <- 4 * combn(tsv, 4) %>%
+    apply(2, sort) %>%
+    apply(2, diff) %>%
+    apply(2, function(x)all(x == 1)) %>%
+    sum()
+  if(runPoints == 0){
+    runPoints <- 3 * combn(tsv, 3) %>%
+    apply(2, sort) %>%
+    apply(2, diff) %>%
+    apply(2, function(x)all(x == 1)) %>%
+    sum()
+  }
+}
+
+
+```
+
+
+```{r}
+
+pairPoints <- 2 * combn(seqvalue[substr(hand, 1,nchar(hand)-1)], 2) %>%
+  apply(., 2, function(x)x[1] == x[2]) %>%
+  sum(.)
+
+```
+
+
+
+```{r}
+stab <- substr(hand, nchar(hand), nchar(hand)) %>%
+  table(.)
+
+suitPoints <- ifelse(any(stab >= 4), stab[stab >= 4], 0)
+suitPoints
+
+```
+
+```{r}
+count <- 2
+AllComb <- lapply(2:5, function(count){
+  combn(fc, count)
+}) 
+
+fifFinder <- data.frame(Empty = 2:5) %>%
+  group_by(Empty) %>%
+  nest() %>%
+  mutate(Combs = map(Empty, function(count){
+  combn(fc, count)
+  }),
+  CombsSum = map(Combs, colSums),
+  N15 = map_int(CombsSum, ~sum(.x == 15))) 
+
+fifPoints <- 2 * sum(fifFinder$N15)
+```
+
+
+```{r}
+totalPoints <- twoforhisnobsPoints + nobbinsPoints + runPoints + pairPoints + suitPoints + fifPoints
+```
+
+
+
+
+
+

@@ -1,0 +1,192 @@
+---
+title: "Untitled"
+author: "Zach"
+date: "12/28/2020"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(keras)
+library(EBImage)
+library(magick)
+source("functions/MagickExtra.R")
+```
+
+```{r}
+suit <- c("S", "H", "C", "D")
+value <- c("A", 2:10, "J", "Q", "K")
+numvalue <- c(1:10, rep(10, 3))
+seqvalue <- 1:13
+names(numvalue) <- names(seqvalue) <- value
+
+deck <- lapply(value, function(x){
+    paste(rep(x, 4), suit, sep = "")
+  }) %>%
+    unlist()
+```
+
+
+
+
+
+```{r}
+AllImgs <- map(deck, function(x){
+  mapL <- map(list.files(paste("CardRec/AllCard/", x, sep = "")), function(y){
+    image_read(paste("CardRec/AllCard/", x, "/", y,sep = "")) %>%
+      image_resize("32x32!")
+  })
+  names(mapL) <- paste(x, 1:100, sep = "_")
+  mapL
+}) 
+
+
+
+AllImDat <- AllImgs %>%
+  flatten() %>%
+  map(~as.numeric(magick::image_data(.x)))
+  # map(convert_img_to_array)
+
+rm(AllImgs)
+
+minus1 <- function(x)x-1
+
+Nummy <- str_split(names(AllImDat), "_") %>%
+  map(2) %>%
+  unlist() %in% paste(1:80)
+
+
+
+all_label <- str_split(names(AllImDat), "_") %>%
+  map(1) %>%
+  unlist()
+
+
+test1 <- AllImDat[Nummy] %>%
+  map(function(x)x@.Data) 
+
+test <- array(dim = c(dim(test1[[1]]), length(test1)))
+for(i in 1:length(test1)){
+  test[,,,i] <- test1[[i]]
+}
+dim(test)
+test <- aperm(test, c(4, 1, 2, 3))
+test_lab <- all_label[Nummy] %>%
+  as.factor()  %>%
+  as.integer() %>%
+  minus1() %>%
+  to_categorical()
+test_y <- all_label[Nummy] %>%
+  as.factor()  %>%
+  as.integer() %>%
+  minus1() 
+
+
+
+
+train1 <- AllImDat[!Nummy] %>%
+  map(function(x)x@.Data)
+
+train <- array(dim = c(dim(train1[[1]]), length(train1)))
+for(i in 1:length(train1)){
+  train[,,,i] <- train1[[i]]
+}
+
+train <- aperm(train, c(4, 1, 2, 3))
+train_lab <- all_label[!Nummy]%>%
+  as.factor()  %>%
+  as.integer() %>%
+  minus1() %>%
+  to_categorical()
+train_y <- all_label[!Nummy]%>%
+  as.factor()  %>%
+  as.integer() %>%
+  minus1()
+
+
+```
+
+
+```{r}
+# Model Building
+model.card<- keras_model_sequential() #-Keras Model composed of a 
+                                      #-----linear stack of layers
+model.card %>%                   #---------Initiate and connect to #----------------------------(A)-----------------------------------#
+layer_conv_2d(filters = 52*10,       #----------First convoluted layer
+ kernel_size = c(3,3),             #---40 Filters with dimension 4x4
+ activation = "relu",              #-with a ReLu activation function
+ input_shape = c(32,32,1)) %>%   
+#----------------------------(B)-----------------------------------#
+layer_conv_2d(filters = 52*10,       #---------Second convoluted layer
+ kernel_size = c(3,3),             #---40 Filters with dimension 4x4
+ activation = "relu") %>%          #-with a ReLu activation function
+#---------------------------(C)-----------------------------------#
+layer_max_pooling_2d(pool_size = c(3,3) )%>%   #--------Max Pooling
+#-----------------------------------------------------------------#
+layer_dropout(rate = 0.25) %>%   #-------------------Drop out layer
+#----------------------------(D)-----------------------------------#
+layer_conv_2d(filters = 52*20,      #-----------Third convoluted layer
+ kernel_size = c(3,3),            #----80 Filters with dimension 4x4
+ activation = "relu") %>%         #--with a ReLu activation function
+#-----------------------------(E)----------------------------------#
+layer_conv_2d(filters = 52*20,      #----------Fourth convoluted layer
+ kernel_size = c(3,3),            #----80 Filters with dimension 4x4
+ activation = "relu") %>%         #--with a ReLu activation function
+#-----------------------------(F)----------------------------------#
+layer_max_pooling_2d(pool_size = c(3,3)) %>%  #---------Max Pooling
+#-----------------------------------------------------------------#
+layer_dropout(rate = 0.35) %>%   #-------------------Drop out layer
+#------------------------------(G)---------------------------------#
+layer_flatten()%>%   #---Flattening the final stack of feature maps
+#------------------------------(H)---------------------------------#
+layer_dense(units = 52*40, activation = "relu")%>% #-----Hidden layer
+#---------------------------(I)-----------------------------------#
+layer_dropout(rate= 0.25)%>%     #-------------------Drop-out layer
+#-----------------------------------------------------------------#
+layer_dense(units = 52, activation = "softmax") 
+
+
+
+model.card %>% #-----Final Layer
+#----------------------------(J)-----------------------------------#
+compile(loss = 'categorical_crossentropy',
+          optimizer = optimizer_adam(),
+          metrics = c("accuracy"))   # Compiling the architecture
+
+summary(model.card)
+
+```
+
+```{r}
+history<- model.card %>%
+ fit(train, 
+ train_lab, 
+ epochs = 10,
+ batch_size = 80,
+ validation_split = 0.2
+ )
+
+
+
+```
+
+
+```{r}
+#Model Evaluation
+model.card %>% evaluate(train,train_lab) #Evaluation of training set 
+pred<- model.card %>% predict_classes(train) #-----Classification
+Train_Result<-table(Predicted = pred, Actual = train_y) #----Results
+model.card %>% evaluate(test, test_lab) #-----Evaluation of test set
+pred1<- model.card  %>% predict_classes(test)   #-----Classification
+Test_Result<-table(Predicted = pred1, Actual = test_y) #-----Results
+# rownames(Train_Result)<-rownames(Test_Result)<-colnames(Train_Result)<-colnames(Test_Result)<-deck
+print(Train_Result)
+print(Test_Result)
+```
+
+```{r}
+sum(diag(Test_Result))/sum(Test_Result)
+```
+
+
+
