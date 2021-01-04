@@ -24,6 +24,15 @@ deck <- lapply(value, function(x){
     paste(rep(x, 4), suit, sep = "")
   }) %>%
     unlist()
+
+
+Suit <- function(x){
+  substr(x, nchar(x), nchar(x))
+}
+
+Number <- function(x){
+  substr(x, 1, nchar(x)-1)
+}
 ```
 
 
@@ -71,12 +80,12 @@ for(i in 1:length(test1)){
 }
 dim(test)
 test <- aperm(test, c(4, 1, 2, 3))
-test_lab <- all_label[Nummy] %>%
+test_lab <- Number(all_label[Nummy]) %>%
   as.factor()  %>%
   as.integer() %>%
   minus1() %>%
   to_categorical()
-test_y <- all_label[Nummy] %>%
+test_y <- Number(all_label[Nummy]) %>%
   as.factor()  %>%
   as.integer() %>%
   minus1() 
@@ -93,12 +102,12 @@ for(i in 1:length(train1)){
 }
 
 train <- aperm(train, c(4, 1, 2, 3))
-train_lab <- all_label[!Nummy]%>%
+train_lab <- Number(all_label[!Nummy])%>%
   as.factor()  %>%
   as.integer() %>%
   minus1() %>%
   to_categorical()
-train_y <- all_label[!Nummy]%>%
+train_y <- Number(all_label[!Nummy])%>%
   as.factor()  %>%
   as.integer() %>%
   minus1()
@@ -112,12 +121,12 @@ train_y <- all_label[!Nummy]%>%
 model.card<- keras_model_sequential() #-Keras Model composed of a 
                                       #-----linear stack of layers
 model.card %>%                   #---------Initiate and connect to #----------------------------(A)-----------------------------------#
-layer_conv_2d(filters = 52*10,       #----------First convoluted layer
+layer_conv_2d(filters = 13*10,       #----------First convoluted layer
  kernel_size = c(3,3),             #---40 Filters with dimension 4x4
  activation = "relu",              #-with a ReLu activation function
  input_shape = c(32,32,1)) %>%   
 #----------------------------(B)-----------------------------------#
-layer_conv_2d(filters = 52*10,       #---------Second convoluted layer
+layer_conv_2d(filters = 13*10,       #---------Second convoluted layer
  kernel_size = c(3,3),             #---40 Filters with dimension 4x4
  activation = "relu") %>%          #-with a ReLu activation function
 #---------------------------(C)-----------------------------------#
@@ -125,11 +134,11 @@ layer_max_pooling_2d(pool_size = c(3,3) )%>%   #--------Max Pooling
 #-----------------------------------------------------------------#
 layer_dropout(rate = 0.25) %>%   #-------------------Drop out layer
 #----------------------------(D)-----------------------------------#
-layer_conv_2d(filters = 52*20,      #-----------Third convoluted layer
+layer_conv_2d(filters = 13*20,      #-----------Third convoluted layer
  kernel_size = c(3,3),            #----80 Filters with dimension 4x4
  activation = "relu") %>%         #--with a ReLu activation function
 #-----------------------------(E)----------------------------------#
-layer_conv_2d(filters = 52*20,      #----------Fourth convoluted layer
+layer_conv_2d(filters = 13*20,      #----------Fourth convoluted layer
  kernel_size = c(3,3),            #----80 Filters with dimension 4x4
  activation = "relu") %>%         #--with a ReLu activation function
 #-----------------------------(F)----------------------------------#
@@ -139,11 +148,11 @@ layer_dropout(rate = 0.35) %>%   #-------------------Drop out layer
 #------------------------------(G)---------------------------------#
 layer_flatten()%>%   #---Flattening the final stack of feature maps
 #------------------------------(H)---------------------------------#
-layer_dense(units = 52*40, activation = "relu")%>% #-----Hidden layer
+layer_dense(units = 13*40, activation = "relu")%>% #-----Hidden layer
 #---------------------------(I)-----------------------------------#
 layer_dropout(rate= 0.25)%>%     #-------------------Drop-out layer
 #-----------------------------------------------------------------#
-layer_dense(units = 52, activation = "softmax") 
+layer_dense(units = 13, activation = "softmax") 
 
 
 
@@ -162,7 +171,7 @@ history<- model.card %>%
  fit(train, 
  train_lab, 
  epochs = 10,
- batch_size = 80,
+ batch_size = 1300*.8,
  validation_split = 0.2
  )
 

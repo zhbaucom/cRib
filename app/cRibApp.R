@@ -3,7 +3,7 @@ library(shiny)
 library(tidyverse)
 library(DT)
 
-source("cRibFun.R")
+# source("functions/cRibFun.R")
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(

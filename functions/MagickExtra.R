@@ -26,7 +26,7 @@ my_abind <- function(arr, mat) {
 }
 
 
-img <- AllImDat[[1]]
+
 convert_img_to_array <- function(img) {
   
   stopifnot(inherits(img, 'magick-image'))

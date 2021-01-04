@@ -1,5 +1,9 @@
 library(magick)
 library(tidyverse)
+
+# unzip("CardRec/AllCard.zip", exdir = "CardRec")
+
+
 white <- image_read("CardRec/AllCard/white.png") %>%
   image_resize("64x64!")
 
