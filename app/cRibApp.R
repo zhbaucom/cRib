@@ -1,43 +1,78 @@
 
 library(shiny)
+library(rsconnect)
 library(tidyverse)
 library(DT)
+library(kableExtra)
 
-# source("functions/cRibFun.R")
+library(tidyverse)
+# source("cRibFun.R")
 
-# Define UI for application that draws a histogram
+
 ui <- fluidPage(
-
+    
     # Application title
     titlePanel("Cribbage"),
-
+    
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
-                selectizeInput("hand", "Choose 6", choices = deck, multiple = TRUE, options = list(maxItems = 6L)),
-                selectInput("speed", "Speed or Info?", choices = c("speed", "info")),
-                actionButton("calc", "Calculate"),
-                br(),
-                br(),
-                uiOutput("flop1")
-                ),
-
+            radioButtons("hs", "Hand Size", choices = 5:6, selected = 6),
+            uiOutput("hs2"),
+            selectInput("speed", "Speed or Info?", choices = c("info", "speed")),
+            actionButton("calc", "Calculate"),
+            br(),
+            br(),
+            uiOutput("flop1")
+        ),
+        
         # Show a plot of the generated distribution
         mainPanel(
-           dataTableOutput("tableOut")
+            tabsetPanel(
+                tabPanel("Best Hand",
+                    tableOutput("tableOut"),
+                    verbatimTextOutput("ac")
+                ),
+                tabPanel("Hand Possiblities",
+                    uiOutput("hout"),
+                    tableOutput("allP")
+                )
+            )
+            
+            
         )
     )
 )
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
+
+    output$hs2 <- renderUI({
+        if(input$hs == 6){
+            selectizeInput("hand", "Choose 6", choices = deck, multiple = TRUE, options = list(maxItems = 6L))
+        }else if(input$hs == 5){
+            selectizeInput("hand", "Choose 5", choices = deck, multiple = TRUE, options = list(maxItems = 5L))
+        }
+    })
     
     output$flop1 <- renderUI({
-        selectizeInput("flop", "Flop", selected = NULL, choices = deck[!(deck %in% input$hand)], multiple = T, options = list(maxItems = 1L))
+        selectizeInput("flop", "The Cut", selected = NULL, choices = deck[!(deck %in% input$hand)], multiple = T, options = list(maxItems = 1L))
+    })
+    
+    output$hout <- renderUI({
+        if(!is.null(CARDS()))
+            selectInput("selHand", "Select Hand", choices = CARDS()$tab1$Hand)
     })
     
     
+
+    
+    
+    
+    
+    
     CARDS <- eventReactive(input$calc, {
+        req(length(input$hand) == input$hs)
         
         handComb <- combn(input$hand, 4)
         
@@ -68,11 +103,11 @@ server <- function(input, output) {
                     sum()
                 
                 if(any(grepl("J", x))){
-                    Avg <- Avg + sum(Suit(deck[!(deck %in% input$hand)]) %in% Suit(x[grepl("J", x)]))/46
+                    Avg <- Avg + sum(Suit(deck[!(deck %in% input$hand)]) %in% Suit(x[grepl("J", x)]))/(52-input$hs)
                 }
                 
                 if(any(table(Suit(x)) == 4)){
-                    Avg <- Avg + 4 + sum(Suit(deck[!(deck %in% input$hand)]) %in% Suit(x[1]))/46
+                    Avg <- Avg + 4 + sum(Suit(deck[!(deck %in% input$hand)]) %in% Suit(x[1]))/(52-input$hs)
                 }
                 Avg
             })
@@ -81,56 +116,128 @@ server <- function(input, output) {
                 allOut = Avgs
             )
         }else{
-            list(
-                handComb = combn(input$hand, 4),
-                allOut = apply(handComb, 2, function(x){
-                    map_dbl(deck[!(deck %in% input$hand)], ~CribCount(kh = x, flop = .x, DEALER = FALSE))
-                })
-            )
+
+            allOut = apply(handComb, 2, function(x){
+                map_dbl(deck[!(deck %in% input$hand)], ~CribCount(kh = x, flop = .x, DEALER = FALSE))
+            })  %>%
+                as.data.frame()%>%
+                cbind(deck[!(deck %in% input$hand)])
+            colnames(allOut) <- c(apply(handComb, 2, paste, collapse = " "), "Cut")
+            
+            tab2 <- allOut %>%
+                gather("Hand", "Value", as.symbol(colnames(allOut)[1]):as.symbol(colnames(allOut)[ncol(allOut)-1]))
+            tab1 <- tab2 %>%
+                group_by(Hand) %>%
+                nest() %>%
+                mutate(
+                    Avg = round(map_dbl(data, ~mean(.x$Value)), 4),
+                    Hist = "",
+                    Min = map_dbl(data, ~quantile(.x$Value, 0)),
+                    `25th` = map_dbl(data, ~quantile(.x$Value, .25)),
+                    Med = map_dbl(data, ~quantile(.x$Value, .5)),
+                    `75th` = map_dbl(data, ~quantile(.x$Value, .75)),
+                    Max = map_dbl(data, ~quantile(.x$Value, 1))
+                ) %>%
+                arrange(desc(Avg), desc(Max), desc(Min))
+            
+            
+            list(tab1 = tab1, tab2 = tab2, allOut = allOut)
+            
+
         }
         
         
         
-
-
         
         
-
-
+        
+        
+        
+        
     })
     
+    chsi <- eventReactive(input$calc, {
+        list(SE = input$speed, ac = input$calc)
+    })
     
-    output$tableOut <- renderDataTable({
+    output$tableOut <- function(){
+
+        validate(
+            need(chsi()$SE == input$speed | input$calc == 0, "Must rerun for desired info...")
+        )
+        validate(
+            need(length(input$hand) == input$hs, "Your hand isn't complete...")
+        )
         if(!is.null(CARDS)){
-            HANDS <- data.frame(t(CARDS()$handComb))
-            colnames(HANDS) <- paste("Card", 1:4)
+            
             if(input$speed == "speed"){
+                HANDS <- data.frame(Hand = apply(CARDS()$handComb, 2, paste, collapse = " "))
                 HANDS$Avg <- round(CARDS()$allOut, 4)
+                HANDS <- HANDS %>%
+                    arrange(desc(Avg))
+                if(!is.null(input$flop)){
+                    HANDS$Points <- apply(CARDS()$handComb, 2, CribCount, flop = input$flop, DEALER = FALSE)
+                }
+                HANDS <-  HANDS %>%
+                    kable("html") %>%
+                    kable_styling("striped", full_width = T)
             }else{
-                
-    
-                    HANDS$Avg <- apply(CARDS()$allOut, 2, mean) %>% round(4)
-                    HANDS$Med <- apply(CARDS()$allOut, 2, median)
-                    HANDS$Min <- apply(CARDS()$allOut, 2, min)
-                    HANDS$Max <- apply(CARDS()$allOut, 2, max)
-                    HANDS$`25th Perc` <- apply(CARDS()$allOut, 2, quantile, .25)
-                    HANDS$`75th Perc` <- apply(CARDS()$allOut, 2, quantile, .75)
-                    
-    
+                if(!is.null(input$flop)){
+                    HANDS <- CARDS()$tab1 %>%
+                        mutate(cut = map_dbl(data, function(x){
+                            x$Value[x$cut == input$flop]
+                        }))
+                }else HANDS <- CARDS()$tab1
+
+                HANDS <- HANDS %>%
+                    select(-data) %>%
+                    kable("html") %>%
+                    kable_styling("striped", full_width = T)%>%
+                    column_spec(3, image = spec_hist(map(HANDS$data, ~.x$Value), res = 200))
+
+
+
             }
-            
-            if(!is.null(input$flop)){
-                HANDS$Hand <- apply(CARDS()$handComb, 2, CribCount, flop = input$flop, DEALER = FALSE)
-            }
-            
-            HANDS %>%
-                arrange(desc(Avg)) %>%
-                datatable(options = list(pageLength = 15, autoWidth = TRUE), rownames= FALSE)
+
+
+
+            HANDS
+
+        }
+    }
+    
+    
+    
+    output$allP <- function(){
+        
+        if(input$speed == "info"){
+            CARDS()$tab2 %>%
+                filter(Hand %in% input$selHand) %>%
+                mutate(garb = TRUE, 
+                       cutyn = ifelse(garb == is.null(input$flop), FALSE, Cut == input$flop)) %>%
+                arrange(desc(Value)) %>%
+                mutate(rrs = rank(-Value, ties.method = "min"))%>%
+                group_by(rrs) %>%
+                mutate(rrs2 = ifelse(length(rrs) > 1, paste("T", rrs, sep = ""), rrs), Rank = paste(rrs2, "out of", nrow(.))) %>%
+                ungroup(rrs) %>%
+                arrange(desc(cutyn)) %>%
+                select(-Hand, -garb, -cutyn, -rrs, -rrs2) %>%
+                kable("html") %>%
+                kable_styling("striped", full_width = T)
+        }else{
+            print("Speed or Info must be set to info...")
+        }
 
     }
-    })
-
-
+    
+    
+    
+    
+    
+    
+    
+    
+    
 }
 
 # Run the application 
